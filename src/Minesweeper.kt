@@ -2,8 +2,12 @@ package minesweeper
 
 import java.util.*
 
-const val mineChar = 'X'
-const val safeChar = '.'
+const val MINE_CHAR = 'X'
+const val SAFE_CHAR = '.'
+
+class Minefield {
+    
+}
 
 fun main() {
     val scanner = Scanner(System.`in`)
@@ -21,7 +25,7 @@ fun main() {
  * @param fieldSize - [Int] Size of the field (eg 9 then 9x9)
  */
 fun createField(fieldSize: Int): String {
-    val emptyField = CharArray(fieldSize) { safeChar }.joinToString("", postfix = "\n")
+    val emptyField = CharArray(fieldSize) { SAFE_CHAR }.joinToString("", postfix = "\n")
     var mineField = ""
     repeat(fieldSize) { mineField += emptyField }
     return mineField
@@ -34,7 +38,7 @@ fun placeMines(mineField: String, numOfMines: Int): String {
         var success = false
         while (!success) {
             val placement = mineField.indices.random()
-            newFieldArray[placement] = if (newFieldArray[placement] != '\n' && newFieldArray[placement] != 'X') mineChar else continue
+            newFieldArray[placement] = if (newFieldArray[placement] != '\n' && newFieldArray[placement] != 'X') MINE_CHAR else continue
             success = true
         }
     }
