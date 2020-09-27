@@ -1,10 +1,12 @@
 package minesweeper
 
-import java.lang.Integer.parseInt
+import kotlin.system.exitProcess
+
 
 const val MINE_CHAR = 'X'
-const val SAFE_CHAR = '.'
+const val EMPTY_CHAR = '.'
 const val FLAG_CHAR = '*'
+const val FREE_CHAR = '/'
 
 /**
  * This object initializes an empty minefield
@@ -12,12 +14,12 @@ const val FLAG_CHAR = '*'
  * @param fieldSize: Int - Size of the field (eg 9 then 9x9)
  */
 class Minefield(val fieldSize: Int) {
-    val currFieldArray: Array<CharArray> = Array(fieldSize) { CharArray(fieldSize) { SAFE_CHAR } }
+    val currFieldArray: Array<CharArray> = Array(fieldSize) { CharArray(fieldSize) { EMPTY_CHAR } }
     var numOfMines: Int = 0
 
     companion object MinefieldState {
         var gameComplete = false
-        var fieldArray: Array<CharArray>? = null
+        private lateinit var fieldArray: Array<CharArray>
         var minesFound = 0
         var flagsSet = 0
     }
@@ -31,8 +33,8 @@ class Minefield(val fieldSize: Int) {
         this.numOfMines += numOfMines
 
         repeat(numOfMines) {
-            var success = false
-            while (!success) {
+            var successfulPlacement = false
+            while (!successfulPlacement) {
                 val row = this.currFieldArray.indices.random()
                 val column = this.currFieldArray.indices.random()
                 val fieldCell = currFieldArray[row][column]
@@ -40,13 +42,23 @@ class Minefield(val fieldSize: Int) {
                     currFieldArray[row][column] = MINE_CHAR
                     addHint(row, column)
                 } else continue
-                success = true
+                successfulPlacement = true
             }
         }
 
         fieldArray = currFieldArray.copy()
 
-        currFieldArray.forEachIndexed { rowNum,row -> row.forEachIndexed { cellNum,cell -> if (cell == MINE_CHAR) currFieldArray[rowNum][cellNum] = SAFE_CHAR }}
+        fieldArray.forEachIndexed { rowNum, row ->
+            row.forEachIndexed { cellNum, cell ->
+                if (cell == EMPTY_CHAR) fieldArray[rowNum][cellNum] = FREE_CHAR
+            }
+        }
+
+        currFieldArray.forEachIndexed { rowNum, row ->
+            row.forEachIndexed { cellNum, cell ->
+                currFieldArray[rowNum][cellNum] = EMPTY_CHAR
+            }
+        }
     }
 
     // Array deep copy util function
@@ -55,7 +67,7 @@ class Minefield(val fieldSize: Int) {
     fun addHint(mineRow: Int, mineColumn: Int) {
         for (row in -1..1) {
             for (column in -1..1) {
-                if (mineColumn + column in 0..8 && mineRow + row in 0..8)
+                if (mineColumn + column in 0 until fieldSize && mineRow + row in 0 until fieldSize)
                     increaseCellHint(mineRow + row, mineColumn + column)
             }
         }
@@ -65,7 +77,7 @@ class Minefield(val fieldSize: Int) {
         val selectedCell = this.currFieldArray[row][column]
         when (selectedCell) {
             MINE_CHAR -> return
-            SAFE_CHAR -> {
+            EMPTY_CHAR -> {
                 this.currFieldArray[row][column] = '1'
             }
             else -> {
@@ -75,38 +87,131 @@ class Minefield(val fieldSize: Int) {
     }
 
     fun checkWin() {
+        var count = 0
+        currFieldArray.forEachIndexed { rowNum, row ->
+            row.forEachIndexed { cellNum, cell ->
+                if (cell == EMPTY_CHAR) count++
+            }
+        }
+        if (count == numOfMines) {
+            println("Congratulations! You found all the mines!")
+            gameComplete = true
+            return
+        }
         if (minesFound == numOfMines && flagsSet == numOfMines) {
-//            printField()
+            printTrueField()
             println("Congratulations! You found all the mines!")
             gameComplete = true
         }
     }
 
-    fun placeFlag(x_cord: Int, y_cord: Int) {
-        val selectedCell = this.currFieldArray[y_cord-1][x_cord-1]
-
-        when {
-            selectedCell == FLAG_CHAR -> {
-                this.currFieldArray[y_cord-1][x_cord-1] = SAFE_CHAR
-                flagsSet--
-                if (fieldArray!![y_cord-1][x_cord-1] == MINE_CHAR) minesFound--
-            }
-            selectedCell.isDigit() -> {
-                println("There is a number here!")
-                return
-            }
-            else -> {
-                this.currFieldArray[y_cord-1][x_cord-1] = FLAG_CHAR
-                flagsSet++
-                if (fieldArray!![y_cord-1][x_cord-1] == MINE_CHAR) minesFound++
+    fun gameLost() {
+        fieldArray.forEachIndexed { rowNum, row ->
+            row.forEachIndexed { cellNum, cell ->
+                if (cell == MINE_CHAR) currFieldArray[rowNum][cellNum] = MINE_CHAR
             }
         }
-        printFieldState()
+        printPlayerField()
+        println("You stepped on a mine and failed!")
+        gameComplete = true
+    }
+
+    fun openFreeCell(x: Int, y: Int) {
+        for (row in -1..1) {
+            for (column in -1..1) {
+                if (x + column in 0 until fieldSize && y + row in 0 until fieldSize) {
+                    val selectedTrueCell = fieldArray[y + row][x + column]
+                    val selectedCell = currFieldArray[y + row][x + column]
+                    when {
+                        selectedTrueCell == FREE_CHAR && selectedCell != FREE_CHAR -> {
+                            currFieldArray[y + row][x + column] = FREE_CHAR
+                            openFreeCell(x + column, y + row)
+                        }
+                        selectedTrueCell.isDigit() -> {
+                            currFieldArray[y + row][x + column] = selectedTrueCell
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun openCell(x: Int, y: Int, action: String) {
+        val selectedTrueCell = fieldArray[y - 1][x - 1]
+        val selectedCell = this.currFieldArray[y - 1][x - 1]
+
+        when (action) {
+            "free" -> when {
+                selectedTrueCell == FLAG_CHAR -> {
+                    this.currFieldArray[y - 1][x - 1] = EMPTY_CHAR
+                    flagsSet--
+                    if (fieldArray[y - 1][x - 1] == MINE_CHAR) minesFound--
+                }
+                selectedTrueCell.isDigit() -> {
+                    if (selectedCell == EMPTY_CHAR) {
+                        this.currFieldArray[y - 1][x - 1] = selectedTrueCell
+                    } else {
+                        println("There is a number here!")
+                        return
+                    }
+                }
+                selectedTrueCell == FREE_CHAR -> {
+                    this.currFieldArray[y - 1][x - 1] = FREE_CHAR
+                    openFreeCell(x - 1, y - 1)
+                }
+                selectedTrueCell == MINE_CHAR -> {
+                    gameLost()
+                    exitProcess(0)
+                }
+            }
+            "mine" -> {
+                when {
+                    selectedCell == FLAG_CHAR -> {
+                        this.currFieldArray[y - 1][x - 1] = EMPTY_CHAR
+                        flagsSet--
+                        if (fieldArray[y - 1][x - 1] == MINE_CHAR) minesFound--
+                    }
+                    selectedTrueCell.isDigit() -> {
+                        if (selectedCell == EMPTY_CHAR) {
+                            this.currFieldArray[y - 1][x - 1] = FLAG_CHAR
+                            flagsSet++
+                        } else {
+                            this.currFieldArray[y - 1][x - 1] = EMPTY_CHAR
+                            flagsSet--
+                            return
+                        }
+                    }
+                    selectedTrueCell == FREE_CHAR -> {
+                        if (selectedCell == EMPTY_CHAR) {
+                            this.currFieldArray[y - 1][x - 1] = FLAG_CHAR
+                            flagsSet++
+                            if (fieldArray[y - 1][x - 1] == MINE_CHAR) minesFound++
+                        } else {
+                            this.currFieldArray[y - 1][x - 1] = EMPTY_CHAR
+                            flagsSet--
+                            if (fieldArray[y - 1][x - 1] == MINE_CHAR) minesFound--
+                        }
+                    }
+                    else -> {
+                        this.currFieldArray[y - 1][x - 1] = FLAG_CHAR
+                        flagsSet++
+                        if (fieldArray[y - 1][x - 1] == MINE_CHAR) minesFound++
+                    }
+                }
+            }
+            else -> {
+                println("Improper action specification, type \'free\' or \'mine\' after coordinates.")
+                return
+            }
+        }
+
+
+        printPlayerField()
         checkWin()
     }
 
-    fun printFieldState() {
-        print(" |")
+    fun printPlayerField() {
+        print("\n |")
         for (x in 1..this.fieldSize) {
             print(x)
         }
@@ -131,7 +236,7 @@ class Minefield(val fieldSize: Int) {
         println("|")
     }
 
-    fun printField() {
+    fun printTrueField() {
         print("\n |")
         for (x in 1..this.fieldSize) {
             print(x)
@@ -143,7 +248,7 @@ class Minefield(val fieldSize: Int) {
         }
         println("|")
         var rowNum = 1
-        for (row in fieldArray!!) {
+        for (row in fieldArray) {
             print("${rowNum++}|")
             for (cell in row) {
                 print(cell)

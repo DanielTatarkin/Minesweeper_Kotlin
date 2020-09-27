@@ -2,7 +2,7 @@ package minesweeper
 
 import java.util.*
 
-const val PROMPT = "Set/delete mines marks (x and y coordinates): > "
+const val PROMPT = "Set/delete mines marks (x and y coordinates): "
 
 fun main() {
     val scanner = Scanner(System.`in`)
@@ -12,11 +12,13 @@ fun main() {
 
     val minefield = Minefield(fieldSize)
     minefield.placeMines(numOfMines)
-    minefield.printFieldState()
+    minefield.printPlayerField()
+
     while (!Minefield.gameComplete) {
         print(PROMPT)
-        var x_cord = scanner.nextInt()
-        var y_cord = scanner.nextInt()
-        minefield.placeFlag(x_cord, y_cord)
+        val x = scanner.nextInt()
+        val y = scanner.nextInt()
+        val action = scanner.next()
+        minefield.openCell(x, y, action)
     }
 }
